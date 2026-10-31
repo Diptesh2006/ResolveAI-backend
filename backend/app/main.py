@@ -44,7 +44,7 @@ def mutate(db, typ, apt_id, key, payload, apply):
 def health(db: Session=Depends(get_db)):
     try: db.execute(text("SELECT 1")); connected=True
     except Exception: connected=False
-    return {"status":"ok" if connected else "degraded","version":"1.0.0","database_connectivity":connected}
+    return {"status":"ok" if connected else "degraded","version":"1.0.0","database_connectivity":connected,"database_engine":engine.dialect.name}
 
 @app.get("/appointments/{appointment_id}", dependencies=[Depends(require_api_key)])
 def get_appointment(appointment_id:str, db:Session=Depends(get_db)):
@@ -124,6 +124,39 @@ def events(appointment_id:str|None=None, operation_id:str|None=None, event_type:
 @app.post("/escalations", dependencies=[Depends(require_api_key)])
 def escalation(req:EscalationRequest, db:Session=Depends(get_db)):
     e=Escalation(operation_id=req.operation_id,reason=req.reason); db.add(e); db.commit(); return {"id":e.id,"status":"OPEN","operation_id":e.operation_id}
+
+# Vaani sends GET arguments as query parameters and POST arguments as JSON.
+# Keep fixed tool URLs and reuse the same authenticated business operations.
+class ToolRescheduleRequest(RescheduleRequest):
+    appointment_id: str
+class ToolCancelRequest(CancelRequest):
+    appointment_id: str
+class ToolReconcileRequest(ReconcileRequest):
+    operation_id: str
+
+@app.get("/tools/appointment", dependencies=[Depends(require_api_key)])
+def tool_appointment(appointment_id: str, db: Session=Depends(get_db)):
+    return get_appointment(appointment_id, db)
+
+@app.get("/tools/history", dependencies=[Depends(require_api_key)])
+def tool_history(appointment_id: str, db: Session=Depends(get_db)):
+    return history(appointment_id, db)
+
+@app.get("/tools/operation", dependencies=[Depends(require_api_key)])
+def tool_operation(operation_id: str, db: Session=Depends(get_db)):
+    return operation(operation_id, db)
+
+@app.post("/tools/reschedule", dependencies=[Depends(require_api_key)])
+def tool_reschedule(req: ToolRescheduleRequest, db: Session=Depends(get_db)):
+    return reschedule(req.appointment_id, RescheduleRequest(**req.model_dump(exclude={"appointment_id"})), db)
+
+@app.post("/tools/cancel", dependencies=[Depends(require_api_key)])
+def tool_cancel(req: ToolCancelRequest, db: Session=Depends(get_db)):
+    return cancel(req.appointment_id, CancelRequest(**req.model_dump(exclude={"appointment_id"})), db)
+
+@app.post("/tools/reconcile", dependencies=[Depends(require_api_key)])
+def tool_reconcile(req: ToolReconcileRequest, db: Session=Depends(get_db)):
+    return reconcile(req.operation_id, ReconcileRequest(**req.model_dump(exclude={"operation_id"})), db)
 
 @app.post("/admin/fault-mode", dependencies=[Depends(require_admin)])
 def fault_mode(mode:str):
