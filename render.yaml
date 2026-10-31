@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: resolveai-backend
+    runtime: python
+    plan: starter
+    region: singapore
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: resolveai-data
+      mountPath: /opt/render/project/src/backend
+      sizeGB: 1
